@@ -1,9 +1,10 @@
 from dataclasses import field
-from pandas import DataFrame
 import os
 import pandas as pd
-from dataclasses import dataclass,replace
+from dataclasses import dataclass,replace,asdict
 from uuid import uuid4
+
+CSV_PATH = "hunts.csv"
 
 @dataclass
 class Pokemon:
@@ -28,7 +29,7 @@ def add_encounter(p:Pokemon) -> Pokemon:
         p,
         encounter_count=p.encounter_count+1
     )
-def remove_encouter(p:Pokemon) -> Pokemon:
+def remove_encounter(p:Pokemon) -> Pokemon:
     return replace(
         p,
         encounter_count=max(0,p.encounter_count-1)
@@ -68,7 +69,7 @@ def start_new_hunt(p:Pokemon,df:pd.DataFrame,csv_path)->pd.DataFrame:
     return df
 
 
-def select_hunt(dataframe: pd.DataFrame) -> str | None:
+def select_hunt(dataframe: pd.DataFrame) -> Pokemon | None:
     if dataframe.empty:
         print("No hunts found. Start a new hunt with N.")
         return None
@@ -94,7 +95,9 @@ def select_hunt(dataframe: pd.DataFrame) -> str | None:
             continue
 
         selected_row = dataframe.iloc[selection]
-        return str(selected_row["hunt_id"])
+        return Pokemon(
+            **selected_row.to_dict()
+        )
 
 def list_hunts(dataframe: pd.DataFrame,select_mode=False) -> None:
 
@@ -102,21 +105,21 @@ def list_hunts(dataframe: pd.DataFrame,select_mode=False) -> None:
         print("No Hunts found. Start a new hunt with N.")
         return
     
-        for index, (_, row) in enumerate(dataframe.iterrows()):
-            if select_mode:
-                print(
-                    index,
-                    row["name"],
-                    row["game"],
-                    row["generation"]
-                )
-            else:
-                print(
-                    row["name"],
-                    row["game"],
-                    row["generation"]
-                )
-            
+    for index, (_, row) in enumerate(dataframe.iterrows()):
+        if select_mode:
+            print(
+                index,
+                row["name"],
+                row["game"],
+                row["generation"]
+            )
+        else:
+            print(
+                row["name"],
+                row["game"],
+                row["generation"]
+            )
+        
 def save_hunt_to_csv(p:Pokemon,dataframe:pd.DataFrame,csv_path) -> pd.DataFrame:
     data_dict = {
                 "name":p.name,
@@ -135,8 +138,16 @@ def save_hunt_to_csv(p:Pokemon,dataframe:pd.DataFrame,csv_path) -> pd.DataFrame:
     dataframe.to_csv(csv_path,index=False)
     return dataframe
 
-def update_hunt_in_csv()->None:
-    pass
+def update_hunt_in_csv(p:Pokemon,df:pd.DataFrame,csv_path)->pd.DataFrame:
+    mask = df["hunt_id"] == p.hunt_id
+
+    if not mask.any():
+        raise ValueError("Hunt not found")
+    updated_row = asdict(p)
+
+    df.loc[mask,updated_row.keys()] = updated_row.values()
+    df.to_csv(csv_path,index=False)
+    return df
 
 def remove_hunt_from_csv(
     p: Pokemon,
@@ -176,5 +187,88 @@ def create_csv(csv_path) -> pd.DataFrame:
 
         dataframe.to_csv(csv_path,index=False)
 
-        return dataframe
+    return dataframe
+
+
+if __name__ == "__main__":
+
+    df = create_csv(CSV_PATH)
+
+    selection = ""
+    
+    exit = False
+    
+    while not exit:
+        print("A - Add New Hunt\n L - List Hunts \n R - Remove Hunt\n S- Select Hunt\nQ - Quit")
+        
+        selection = input("Enter your selection: ").lower()
+
+        match selection:
+            case 'q':
+                exit = True
+            case "a":
+                name = input("Enter Pokemon's Name: ")
+                generation = input ("Enter Generation Of Game: ")
+
+                while not generation.isdigit():
+                    generation = input ("Enter Generation Of Game: ")
+                
+                generation = int(generation)
+                game = input("Enter Game Name: ")
+
+                shiny_charm = input("Do you have a shiny charm? Y/N: ")
+                sc = shiny_charm == "y"
+                p = Pokemon(name=name,encounter_count=0,generation=generation,game=game,is_done=False,shiny_charm=sc)
+                df =save_hunt_to_csv(p,df,CSV_PATH)
+            case "l":
+                list_hunts(df)
+            case "r":
+                pokemon = select_hunt(df)
+
+                if pokemon is not None:
+
+                    df = remove_hunt_from_csv(pokemon,df,CSV_PATH)
+            case "s":
+                p = select_hunt(df)
+                
+                if p is not None:
+                    ishunting = True
+
+                    while ishunting:
+                        print(p)
+                        
+                        selection = input("A- Add Encounter, S - Subtract Encounter \nC- Add Custom Encounter Amount, R - Remove Custom Encounter Amount\nF - Done, Q - Quit\n")
+
+                        match selection.lower():
+                            case 'a':
+                                p = add_encounter(p)
+                            case 's':
+                                p = remove_encounter(p)
+                            case 'c':
+                                incounter = input("Enter Increase Amount: ")
+
+                                while not incounter.isdigit():
+                                    incounter = input("Enter Increase Amount: ")
+
+                                incounter = int(incounter)
+
+                                p = custom_add_encounter(p,incounter)
+                            case 'd':
+                                decounter = input("Enter Decrease Amount: ")
+
+                                while not decounter.isdigit():
+                                    decounter = input("Enter Decrease Amount: ")
+
+                                decounter = int(decounter)
+
+                                p = custom_remove_encounter(p,decounter)
+                            case 'q':
+                                ishunting=False
+                            
+                            case 'f':
+                                p = mark_hunt_complete(p)
+                                update_hunt_in_csv(p,df,CSV_PATH)
+                                ishunting = False
+                    
+                    df = update_hunt_in_csv(p,df,CSV_PATH)
 
