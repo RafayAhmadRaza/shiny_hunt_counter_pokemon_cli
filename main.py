@@ -235,7 +235,15 @@ if __name__ == "__main__":
                     ishunting = True
 
                     while ishunting:
-                        print(p)
+                        print("Information About Current Hunt!")
+                        print("Name: ",p.name)
+                        print("Game: ",p.game)
+                        print("Encounters: ",p.encounter_count)
+                        print("Gen: ",p.generation)
+                        print("Odds: 1 in",p.odds)
+                        print("Shiny Charm: ","No" if p.shiny_charm==False else "Yes")
+                        prob = (1 - (( 1 -1/p.odds)**p.encounter_count)) * 100
+                        print(f"Probability: {prob:.4f}%")
                         
                         selection = input("A- Add Encounter, S - Subtract Encounter \nC- Add Custom Encounter Amount, R - Remove Custom Encounter Amount\nF - Done, Q - Quit\n")
 
