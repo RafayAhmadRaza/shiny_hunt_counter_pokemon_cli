@@ -1,282 +1,148 @@
-from dataclasses import field
-import os
-import pandas as pd
-from dataclasses import dataclass,replace,asdict
+import streamlit as st
+from functions import (
+    CSV_PATH,
+    create_csv,
+    remove_hunt_from_csv,
+    custom_add_encounter,
+    custom_remove_encounter,
+    toggle_shiny_charm,
+    mark_hunt_complete,
+    start_new_hunt,
+    save_hunt_to_csv,
+    remove_hunt_from_csv,
+    update_hunt_in_csv,
+    calulate_probability,
+    from_csv_to_Pokemon,
+    update_hunt_in_csv,
+    Pokemon
+)
+from sympy import false
 from uuid import uuid4
 
-CSV_PATH = "hunts.csv"
+st.title("Shiny Hunt Tracker")
 
-@dataclass
-class Pokemon:
-    name:str
-    encounter_count:int
-    generation:int
-    game:str 
-    is_done:bool
-    hunt_id:str = field(default_factory=lambda:str(uuid4()))
-    odds:int | None = None
-    shiny_charm: bool = False
+df = create_csv(CSV_PATH)
 
-    def __post_init__(self):
-        if self.odds is None:
-            self.odds = (
-                8192 if self.generation <=5
-                else 4096
+st.write(df)
+
+p_list = from_csv_to_Pokemon(df)
+
+total_encounters=0
+total_hunts = 0
+for p in p_list:
+    total_encounters+=p.encounter_count
+    if not p.is_done:
+        total_hunts+=1
+
+
+
+col1,col2 = st.columns(2)
+col1.write("## Total Encounters")
+col1.write(f"### {total_encounters}")
+col2.write("## Total Hunts")
+col2.write(f"### {total_hunts}")
+
+
+st.divider()
+
+
+for p in p_list:
+    with st.container(border=True):
+
+        col1, col2, col3 = st.columns([1, 5, 1],vertical_alignment="center")
+
+        with col1:
+            if st.button("Minus", key=f"remove_{p.hunt_id}",width="content"):
+                p = custom_remove_encounter(p,1)
+                update_hunt_in_csv(p,df,CSV_PATH)
+                st.rerun()
+           
+        with col2:
+            st.markdown(
+                f"<h3 style='text-align: center;'>{p.name}</h3>",
+                unsafe_allow_html=True
             )
-    
-def add_encounter(p:Pokemon) -> Pokemon:
-    return replace(
-        p,
-        encounter_count=p.encounter_count+1
-    )
-def remove_encounter(p:Pokemon) -> Pokemon:
-    return replace(
-        p,
-        encounter_count=max(0,p.encounter_count-1)
-    )
 
-def custom_add_encounter(p:Pokemon,increase_count:int):
-    if increase_count<=0:
-        raise ValueError("Increase must be positive")
-    return replace(
-        p,
-        encounter_count=p.encounter_count+increase_count
-    )
+            col_game, col_gen = st.columns(2)
 
-def custom_remove_encounter(p:Pokemon,decrease_count:int):
-    if decrease_count<=0:
-        raise ValueError("Value enter must be positive")
-    return replace(
-        p,
-        encounter_count=max(0,p.encounter_count-decrease_count)
-    )
-
-def toggle_shiny_charm(p:Pokemon)->Pokemon:
-    charm_bool = not p.shiny_charm
-    return replace(
-        p,
-        shiny_charm=charm_bool
-    )
-
-def mark_hunt_complete(p:Pokemon)-> Pokemon:
-    return replace(
-        p,
-        is_done=True
-    )
-
-def start_new_hunt(p:Pokemon,df:pd.DataFrame,csv_path)->pd.DataFrame:
-    df = save_hunt_to_csv(p,df,csv_path)
-    return df
-
-
-def select_hunt(dataframe: pd.DataFrame) -> Pokemon | None:
-    if dataframe.empty:
-        print("No hunts found. Start a new hunt with N.")
-        return None
-
-    list_hunts(dataframe, select_mode=True)
-
-    while True:
-        selection = input(
-            "Enter number of hunt (Q to cancel): "
-        ).strip()
-
-        if selection.lower() == "q":
-            return None
-
-        if not selection.isdigit():
-            print("Enter a valid number.")
-            continue
-
-        selection = int(selection)
-
-        if selection >= len(dataframe):
-            print("Selection out of range.")
-            continue
-
-        selected_row = dataframe.iloc[selection]
-        return Pokemon(
-            **selected_row.to_dict()
-        )
-
-def list_hunts(dataframe: pd.DataFrame,select_mode=False) -> None:
-
-    if dataframe.empty:
-        print("No Hunts found. Start a new hunt with N.")
-        return
-    
-    for index, (_, row) in enumerate(dataframe.iterrows()):
-        if select_mode:
-            print(
-                index,
-                row["name"],
-                row["game"],
-                row["generation"]
+            col_game.markdown(
+                f"<div style='text-align: center;'><b>Game</b><br>{p.game}</div>",
+                unsafe_allow_html=True
             )
-        else:
-            print(
-                row["name"],
-                row["game"],
-                row["generation"]
+
+            col_gen.markdown(
+                f"<div style='text-align: center;'><b>Generation</b><br>{p.generation}</div>",
+                unsafe_allow_html=True
             )
-        
-def save_hunt_to_csv(p:Pokemon,dataframe:pd.DataFrame,csv_path) -> pd.DataFrame:
-    data_dict = {
-                "name":p.name,
-                "encounter_count":p.encounter_count,
-                "generation":p.generation,
-                "game":p.game,
-                "is_done":p.is_done,
-                "odds":p.odds,
-                "shiny_charm":p.shiny_charm,
-                "hunt_id":p.hunt_id
-    }
 
-    new_row = pd.DataFrame([data_dict])
+            col_enc, col_odds = st.columns(2)
 
-    dataframe= pd.concat([dataframe,new_row],ignore_index=True)
-    dataframe.to_csv(csv_path,index=False)
-    return dataframe
+            col_enc.markdown(
+                f"<div style='text-align: center;'><b>Encounters</b><br>{p.encounter_count}</div>",
+                unsafe_allow_html=True
+            )
 
-def update_hunt_in_csv(p:Pokemon,df:pd.DataFrame,csv_path)->pd.DataFrame:
-    mask = df["hunt_id"] == p.hunt_id
+            col_odds.markdown(
+                f"<div style='text-align: center;'><b>Odds</b><br>1/{p.odds}</div>",
+                unsafe_allow_html=True
+            )
 
-    if not mask.any():
-        raise ValueError("Hunt not found")
-    updated_row = asdict(p)
+            probability = calulate_probability(p)
 
-    df.loc[mask,updated_row.keys()] = updated_row.values()
-    df.to_csv(csv_path,index=False)
-    return df
+            st.markdown(
+                f"<h4 style='text-align: center;'>Probability: {probability:.2f}%</h4>",
+                unsafe_allow_html=True
+            )
 
-def remove_hunt_from_csv(
-    p: Pokemon,
-    dataframe: pd.DataFrame,
-    csv_path: str
-) -> pd.DataFrame:
+            _, checkbox_col, _ = st.columns([1, 2, 1])
 
-    dataframe = dataframe.loc[
-        dataframe["hunt_id"] != p.hunt_id
-    ].copy()
+            with checkbox_col:
+                shiny_charm = st.checkbox(
+                    "Shiny Charm",
+                    value=p.shiny_charm,
+                    key=f"charm_{p.hunt_id}"
+                )
 
-    dataframe.to_csv(csv_path, index=False)
-    return dataframe
-    
+                is_done = st.checkbox(
+                    "Hunt Done",
+                    value=p.is_done,
+                    key=f"done_{p.hunt_id}"
+                )
 
-def load_csv(csv_path) -> pd.DataFrame: 
-    return pd.read_csv(csv_path)
+            isChanged = False
+            
+            if shiny_charm != p.shiny_charm:
+                p.shiny_charm = shiny_charm
+                isChanged=True
+            if p.is_done != is_done:
+                p.is_done = is_done
+                isChanged = True
 
-def create_csv(csv_path) -> pd.DataFrame: 
-    
-    if os.path.exists(csv_path):
-        dataframe = load_csv(csv_path)
-    
-    else:
-        dataframe = pd.DataFrame(
-            columns=[
-                "name",
-                "encounter_count",
-                "generation",
-                "game",
-                "is_done",
-                "odds",
-                "shiny_charm",
-                "hunt_id"
-            ]
-        )
-
-        dataframe.to_csv(csv_path,index=False)
-
-    return dataframe
+            if isChanged:
+                update_hunt_in_csv(p,df,CSV_PATH)
+                st.rerun()
 
 
-if __name__ == "__main__":
+        with col3:
+            if st.button("Add", key=f"add_{p.hunt_id}",width="content"):
+                p = custom_add_encounter(p,1)
+                update_hunt_in_csv(p,df,CSV_PATH)
+                st.rerun()
 
-    df = create_csv(CSV_PATH)
 
-    selection = ""
-    
-    exit = False
-    
-    while not exit:
-        print("A - Add New Hunt\n L - List Hunts \n R - Remove Hunt\n S- Select Hunt\nQ - Quit")
-        
-        selection = input("Enter your selection: ").lower()
+if st.button("Add New Hunt"):
+    with st.form("my_form",clear_on_submit=True,enter_to_submit=True,border=True):
+        st.write("New Hunt")
+        name = st.text_input("Enter Pokemon Name")
+        game = st.text_input("Enter Game Name")
+        generation = st.number_input("Enter Game Generation",1,9)
+        shiny_charm = st.checkbox("Have Shiny Charm?")
 
-        match selection:
-            case 'q':
-                exit = True
-            case "a":
-                name = input("Enter Pokemon's Name: ")
-                generation = input ("Enter Generation Of Game: ")
 
-                while not generation.isdigit():
-                    generation = input ("Enter Generation Of Game: ")
-                
-                generation = int(generation)
-                game = input("Enter Game Name: ")
+        submitted = st.form_submit_button("Submit")
 
-                shiny_charm = input("Do you have a shiny charm? Y/N: ")
-                sc = shiny_charm == "y"
-                p = Pokemon(name=name,encounter_count=0,generation=generation,game=game,is_done=False,shiny_charm=sc)
-                df =save_hunt_to_csv(p,df,CSV_PATH)
-            case "l":
-                list_hunts(df)
-            case "r":
-                pokemon = select_hunt(df)
-
-                if pokemon is not None:
-
-                    df = remove_hunt_from_csv(pokemon,df,CSV_PATH)
-            case "s":
-                p = select_hunt(df)
-                
-                if p is not None:
-                    ishunting = True
-
-                    while ishunting:
-                        print("Information About Current Hunt!")
-                        print("Name: ",p.name)
-                        print("Game: ",p.game)
-                        print("Encounters: ",p.encounter_count)
-                        print("Gen: ",p.generation)
-                        print("Odds: 1 in",p.odds)
-                        print("Shiny Charm: ","No" if p.shiny_charm==False else "Yes")
-                        prob = (1 - (( 1 -1/p.odds)**p.encounter_count)) * 100
-                        print(f"Probability: {prob:.4f}%")
-                        
-                        selection = input("A- Add Encounter, S - Subtract Encounter \nC- Add Custom Encounter Amount, R - Remove Custom Encounter Amount\nF - Done, Q - Quit\n")
-
-                        match selection.lower():
-                            case 'a':
-                                p = add_encounter(p)
-                            case 's':
-                                p = remove_encounter(p)
-                            case 'c':
-                                incounter = input("Enter Increase Amount: ")
-
-                                while not incounter.isdigit():
-                                    incounter = input("Enter Increase Amount: ")
-
-                                incounter = int(incounter)
-
-                                p = custom_add_encounter(p,incounter)
-                            case 'd':
-                                decounter = input("Enter Decrease Amount: ")
-
-                                while not decounter.isdigit():
-                                    decounter = input("Enter Decrease Amount: ")
-
-                                decounter = int(decounter)
-
-                                p = custom_remove_encounter(p,decounter)
-                            case 'q':
-                                ishunting=False
-                            
-                            case 'f':
-                                p = mark_hunt_complete(p)
-                                update_hunt_in_csv(p,df,CSV_PATH)
-                                ishunting = False
-                    
-                    df = update_hunt_in_csv(p,df,CSV_PATH)
-
+        if submitted:
+            new_p =Pokemon(name=name,game=game,generation=generation,encounter_count=0,shiny_charm=shiny_charm)
+            if new_p is not None:
+                save_hunt_to_csv(new_p,df,CSV_PATH)
+                st.rerun()
