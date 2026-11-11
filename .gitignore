@@ -1,2 +1,14 @@
+# Local hunt data (keep it out of version control)
 *.csv
+
+# Backups created before migrations and writes
+backups/
+
+# Python / tooling caches
 .venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local agent/tool configuration
+.opencode/
