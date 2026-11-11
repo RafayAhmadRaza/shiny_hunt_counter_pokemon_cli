@@ -176,8 +176,10 @@ Highlights:
   the charm where both exist.
 - Gen VIII/IX breeding has an egg-roll bug: charm-only breeding is 2 rolls,
   Masuda is 6, and Masuda + charm is 8.
-- Gen III has breeding but no Masuda Method. Legends: Arceus and Legends: Z-A
-  have no breeding, so they have no Masuda Method either.
+- Masuda is unavailable in Gen I (no breeding), Gen II and Gen III (breeding
+  exists, but Masuda was introduced in Gen IV), Let's Go (no breeding), and
+  Legends: Arceus/Legends: Z-A (no breeding). The capability registry stores
+  this per game rather than inferring it from the generation number.
 - Gen IV Masuda is 5 rolls here. Serebii's older page says 4; the discrepancy
   is documented.
 

@@ -180,7 +180,9 @@ Generation IV. Games without breeding never offer it.
 
 | Game(s) | Masuda total rolls | Approx. odds | With Shiny Charm |
 |---|---:|---|---|
-| Gen III | Not available (predates Masuda) | n/a | n/a |
+| Gen I | Not available (no breeding) | n/a | n/a |
+| Gen II | Not available (breeding exists, Masuda introduced in Gen IV) | n/a | n/a |
+| Gen III | Not available (breeding exists, Masuda introduced in Gen IV) | n/a | n/a |
 | Gen IV | 5 | 1/1,638.8 | n/a (no Charm) |
 | Black/White | 6 | 1/1,365.8 | n/a (no Charm) |
 | Black 2/White 2 | 6 | 1/1,365.8 | 8 rolls, 1/1,024.4 |
@@ -196,6 +198,33 @@ Masuda is selectable only when the selected encounter method is **Breeding**.
 Selecting wild or static encounters disables it and explains that Masuda only
 applies to eggs. Switching games or methods updates the option immediately; it
 is never permanently locked by an earlier selection.
+
+### Complete game capability registry
+
+Breeding and Masuda support are stored per game in `GAME_CAPABILITIES`. The
+generation number is never used as a shortcut. The registry covers every game
+named in the Masuda rules, including games whose ordinary shiny odds are not
+modelled by the tracker.
+
+| Generation | Games | Breeding | Masuda Method |
+|---|---|:---:|:---:|
+| I | Red, Blue, Yellow | No | No |
+| II | Gold, Silver, Crystal | Yes | No |
+| III | Ruby, Sapphire, Emerald, FireRed, LeafGreen | Yes | No |
+| IV | Diamond, Pearl, Platinum, HeartGold, SoulSilver | Yes | Yes |
+| V | Black, White, Black 2, White 2 | Yes | Yes |
+| VI | X, Y, Omega Ruby, Alpha Sapphire | Yes | Yes |
+| VII | Sun, Moon, Ultra Sun, Ultra Moon | Yes | Yes |
+| VII | Let's Go, Pikachu!, Let's Go, Eevee! | No | No |
+| VIII | Sword, Shield, Brilliant Diamond, Shining Pearl | Yes | Yes |
+| VIII | Legends: Arceus | No | No |
+| IX | Scarlet, Violet | Yes | Yes |
+| IX | Legends: Z-A | No | No |
+
+Generation II's shiny-inheritance mechanic is **not** the Masuda Method and is
+not modelled here. Generation III has ordinary breeding, but Masuda was not
+introduced until Generation IV. Red, Blue, Yellow and the Let's Go games have
+no breeding.
 
 ### Gen IV source disagreement
 
@@ -224,7 +253,9 @@ bonuses. The app displays this caveat whenever the PLA charm is applied.
 
 The tracker does not calculate odds for:
 
-- **Generation I and II** (no standard shiny mechanic as modelled here).
+- **Generation I** (the original games have no standard shiny mechanic).
+- **Generation II** (wild/static base odds exist, but shiny inheritance is a
+  separate mechanic and is not modelled).
 - **Let's Go, Pikachu!/Eevee!** (catch-combo and lure mechanics).
 - Spin-offs (Mystery Dungeon, Ranger, Pokéwalker, etc.).
 - **Gen VI chain fishing, Poké Radar and hordes.**
@@ -238,6 +269,11 @@ The tracker does not calculate odds for:
 
 Legends: Arceus and Legends: Z-A **are** supported games for wild encounters.
 They are not unsupported games; they simply have no breeding or Masuda Method.
+
+Generation I, Generation II and the Let's Go games are in the capability
+registry so their Masuda status is explicit, but the tracker does not yet
+calculate ordinary shiny odds for them. Existing CSV rows for those games are
+preserved, with odds shown as unavailable.
 
 For unsupported games the app keeps existing CSV rows intact, shows the odds
 as unavailable, and reports the game in a warning. New hunts can only be
@@ -263,6 +299,8 @@ Primary references:
   https://www.serebii.net/brilliantdiamondshiningpearl/shinypokemon.shtml
 - Serebii — Legends: Arceus shiny Pokémon:
   https://www.serebii.net/legendsarceus/shinypokemon.shtml
+- Serebii — Let's Go, Pikachu!/Eevee! shiny Pokémon:
+  https://www.serebii.net/letsgopikachueevee/shinypokemon.shtml
 - Serebii — Scarlet/Violet shiny Pokémon:
   https://www.serebii.net/scarletviolet/shinypokemon.shtml
 - Serebii — Legends: Z-A shiny Pokémon:

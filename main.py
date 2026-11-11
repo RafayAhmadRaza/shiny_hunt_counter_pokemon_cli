@@ -298,13 +298,24 @@ with st.expander("Add a new hunt", expanded=False):
         help="Only games with researched shiny mechanics are listed.",
     )
     mechanics = get_mechanics(game)
+    method_key = f"new_method_{game}"
+    if method_key not in st.session_state:
+        # Carry the last selected method across game switches when the new game
+        # supports it, so switching games does not silently reset the form.
+        remembered = st.session_state.get("_last_method")
+        st.session_state[method_key] = (
+            remembered
+            if remembered in mechanics.supported_methods
+            else mechanics.supported_methods[0]
+        )
     method = st.selectbox(
         "Encounter method",
         mechanics.supported_methods,
         format_func=encounter_method_label,
-        key=f"new_method_{game}",
+        key=method_key,
         help="Only methods with a verified shiny mechanic for this game are shown.",
     )
+    st.session_state["_last_method"] = method
     if not mechanics.can_breed:
         st.caption(f"{game} has no breeding. Only wild encounters are available.")
     charm_ok = shiny_charm_available(game, method)

@@ -4,6 +4,7 @@ import pytest
 
 from shiny_mechanics import (
     BREEDING,
+    GAME_CAPABILITIES,
     STATIC,
     SUPPORTED_GAMES,
     WILD,
@@ -14,7 +15,9 @@ from shiny_mechanics import (
     format_one_in,
     game_generation,
     game_supports_breeding,
+    get_capabilities,
     get_mechanics,
+    is_known_game,
     is_supported_game,
     masuda_available,
     masuda_unavailable_reason,
@@ -63,7 +66,91 @@ def test_supported_game_list_is_stable_and_complete():
         assert is_supported_game(game)
 
 
+MASUDA_SUPPORTED_GAMES = (
+    # Generation IV
+    "Diamond",
+    "Pearl",
+    "Platinum",
+    "HeartGold",
+    "SoulSilver",
+    # Generation V
+    "Black",
+    "White",
+    "Black 2",
+    "White 2",
+    # Generation VI
+    "X",
+    "Y",
+    "Omega Ruby",
+    "Alpha Sapphire",
+    # Generation VII
+    "Sun",
+    "Moon",
+    "Ultra Sun",
+    "Ultra Moon",
+    # Generation VIII
+    "Sword",
+    "Shield",
+    "Brilliant Diamond",
+    "Shining Pearl",
+    # Generation IX
+    "Scarlet",
+    "Violet",
+)
+
+MASUDA_UNSUPPORTED_GAMES = (
+    # Generation I: no breeding.
+    "Red",
+    "Blue",
+    "Yellow",
+    # Generation II: breeding, but no Masuda.
+    "Gold",
+    "Silver",
+    "Crystal",
+    # Generation III: breeding, but no Masuda.
+    "Ruby",
+    "Sapphire",
+    "Emerald",
+    "FireRed",
+    "LeafGreen",
+    # Let's Go: no breeding.
+    "Let's Go, Pikachu!",
+    "Let's Go, Eevee!",
+    # Legends games: no breeding.
+    "Legends: Arceus",
+    "Legends: Z-A",
+)
+
+BREEDING_GAMES_WITHOUT_MASUDA = (
+    "Gold",
+    "Silver",
+    "Crystal",
+    "Ruby",
+    "Sapphire",
+    "Emerald",
+    "FireRed",
+    "LeafGreen",
+)
+
+NO_BREEDING_GAMES = (
+    "Red",
+    "Blue",
+    "Yellow",
+    "Let's Go, Pikachu!",
+    "Let's Go, Eevee!",
+    "Legends: Arceus",
+    "Legends: Z-A",
+)
+
 EXPECTED_CAPABILITIES = {
+    # Generation I: no breeding, no Masuda.
+    "Red": (False, False),
+    "Blue": (False, False),
+    "Yellow": (False, False),
+    # Generation II: breeding exists, Masuda does not.
+    "Gold": (True, False),
+    "Silver": (True, False),
+    "Crystal": (True, False),
     # Generation III: breeding exists, Masuda does not.
     "Ruby": (True, False),
     "Sapphire": (True, False),
@@ -101,29 +188,101 @@ EXPECTED_CAPABILITIES = {
     "Scarlet": (True, True),
     "Violet": (True, True),
     "Legends: Z-A": (False, False),
+    # Let's Go: no breeding, no Masuda.
+    "Let's Go, Pikachu!": (False, False),
+    "Let's Go, Eevee!": (False, False),
 }
 
 
+def test_capability_registry_covers_every_game_in_both_masuda_lists():
+    listed = set(MASUDA_SUPPORTED_GAMES) | set(MASUDA_UNSUPPORTED_GAMES)
+    assert len(MASUDA_SUPPORTED_GAMES) == 23
+    assert len(MASUDA_UNSUPPORTED_GAMES) == 15
+    assert listed == set(GAME_CAPABILITIES)
+    assert set(EXPECTED_CAPABILITIES) == listed
+
+
 def test_every_game_has_explicit_breeding_and_masuda_capabilities():
-    assert set(EXPECTED_CAPABILITIES) == set(SUPPORTED_GAMES)
-    for game, (can_breed, masuda_supported) in EXPECTED_CAPABILITIES.items():
-        mechanics = get_mechanics(game)
-        assert mechanics is not None
-        assert mechanics.can_breed is can_breed, game
-        assert mechanics.masuda_supported is masuda_supported, game
+    for game, (can_breed, masuda_method) in EXPECTED_CAPABILITIES.items():
+        capabilities = get_capabilities(game)
+        assert capabilities is not None, game
+        assert capabilities.breeding is can_breed, game
+        assert capabilities.masuda_method is masuda_method, game
         assert game_supports_breeding(game) is can_breed, game
-        assert mechanics.has_masuda is masuda_supported, game
-        assert masuda_available(game, BREEDING) is masuda_supported, game
+        assert masuda_available(game, BREEDING) is masuda_method, game
         assert masuda_available(game, WILD) is False, game
         assert masuda_available(game, STATIC) is False, game
 
 
-def test_masuda_reason_matches_capability():
-    assert masuda_unavailable_reason("Platinum", BREEDING) is None
-    assert "only applies to breeding" in masuda_unavailable_reason("Platinum", WILD)
-    assert "no breeding" in masuda_unavailable_reason("Legends: Arceus")
-    assert "no breeding" in masuda_unavailable_reason("Legends: Z-A")
-    assert "not available" in masuda_unavailable_reason("FireRed", BREEDING)
+def test_masuda_supported_games_are_enabled_for_breeding_only():
+    for game in MASUDA_SUPPORTED_GAMES:
+        capabilities = get_capabilities(game)
+        assert capabilities is not None
+        assert capabilities.breeding is True, game
+        assert capabilities.masuda_method is True, game
+        assert masuda_available(game, BREEDING) is True, game
+        assert masuda_unavailable_reason(game, BREEDING) is None, game
+        assert "only applies to breeding" in masuda_unavailable_reason(game, WILD)
+        assert is_supported_game(game), game
+
+
+def test_masuda_unavailable_games_are_disabled():
+    for game in MASUDA_UNSUPPORTED_GAMES:
+        capabilities = get_capabilities(game)
+        assert capabilities is not None, game
+        assert capabilities.masuda_method is False, game
+        assert masuda_available(game, BREEDING) is False, game
+        assert is_known_game(game), game
+        reason = masuda_unavailable_reason(game, BREEDING)
+        assert reason, game
+        if capabilities.breeding:
+            assert "not available" in reason, game
+        else:
+            assert "no breeding" in reason, game
+
+
+def test_breeding_is_not_confused_with_masuda():
+    for game in BREEDING_GAMES_WITHOUT_MASUDA:
+        assert game_supports_breeding(game) is True, game
+        capabilities = get_capabilities(game)
+        assert capabilities is not None
+        assert capabilities.masuda_method is False, game
+        assert masuda_available(game, BREEDING) is False, game
+
+    for game in NO_BREEDING_GAMES:
+        assert game_supports_breeding(game) is False, game
+        capabilities = get_capabilities(game)
+        assert capabilities is not None
+        assert capabilities.masuda_method is False, game
+        assert masuda_available(game, BREEDING) is False, game
+
+
+def test_supported_games_match_mechanics_capabilities():
+    for game in SUPPORTED_GAMES:
+        mechanics = get_mechanics(game)
+        capabilities = get_capabilities(game)
+        assert mechanics is not None, game
+        assert capabilities is not None, game
+        assert mechanics.can_breed is capabilities.breeding, game
+        assert mechanics.masuda_supported is capabilities.masuda_method, game
+        assert mechanics.has_masuda is capabilities.masuda_method, game
+
+
+def test_known_games_without_odds_are_not_huntable():
+    for game in (
+        "Red",
+        "Blue",
+        "Yellow",
+        "Gold",
+        "Silver",
+        "Crystal",
+        "Let's Go, Pikachu!",
+        "Let's Go, Eevee!",
+    ):
+        assert is_known_game(game), game
+        assert is_supported_game(game) is False, game
+        assert get_mechanics(game) is None, game
+        assert calculate_shiny_odds(game).supported is False, game
 
 
 def test_shiny_charm_reason_matches_capability():
@@ -156,6 +315,12 @@ def test_counter_labels_distinguish_eggs_from_encounters():
         ("Legends: Z-A", "Legends: Z-A"),
         ("legendsza", "Legends: Z-A"),
         ("ZA", "Legends: Z-A"),
+        ("Pokémon Red Version", "Red"),
+        ("Pokémon Gold Version", "Gold"),
+        ("GSC", "Gold"),
+        ("Let's Go Pikachu", "Let's Go, Pikachu!"),
+        ("Pokémon Let's Go, Eevee!", "Let's Go, Eevee!"),
+        ("LGPE", "Let's Go, Pikachu!"),
     ],
 )
 def test_game_aliases(alias, expected):

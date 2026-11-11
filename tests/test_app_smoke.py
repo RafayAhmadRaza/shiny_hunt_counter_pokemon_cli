@@ -125,6 +125,61 @@ def test_app_masuda_tracks_game_and_method_switches(tmp_path, monkeypatch):
         assert app.checkbox(key="new_charm").disabled is False
 
 
+def test_app_gen3_games_cannot_enable_masuda(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    app = AppTest.from_file(str(ROOT / "main.py"), default_timeout=60)
+    app.run()
+
+    for game in ("Ruby", "Sapphire", "Emerald", "FireRed", "LeafGreen"):
+        app.selectbox(key="new_game").select(game)
+        app.run()
+        method_box = app.selectbox(key=f"new_method_{game}")
+        assert "Breeding (eggs)" in method_box.options, game
+        method_box.set_value("breeding")
+        app.run()
+        assert app.checkbox(key="new_masuda").disabled is True, game
+
+    # A Gen III hunt created while breeding is selected keeps the base roll.
+    app.text_input(key="new_name").set_value("Pikachu")
+    app.button[0].click()
+    app.run()
+
+    assert not app.exception
+    hunts = pd.read_csv(tmp_path / "hunts.csv")
+    row = hunts.iloc[0]
+    assert row["game"] == "LeafGreen"
+    assert row["encounter_method"] == "breeding"
+    assert bool(row["masuda_method"]) is False
+
+    pokemon = tracker.Pokemon.from_row(row)
+    result = tracker.hunt_odds(pokemon)
+    assert result.total_rolls == 1
+    assert result.masuda_applied is False
+    assert result.one_in == pytest.approx(8192)
+
+
+def test_app_carries_method_and_masuda_across_supported_games(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+
+    app = AppTest.from_file(str(ROOT / "main.py"), default_timeout=60)
+    app.run()
+
+    app.selectbox(key="new_game").select("Platinum")
+    app.run()
+    app.selectbox(key="new_method_Platinum").set_value("breeding")
+    app.run()
+
+    # Black 2 also supports breeding and Masuda, so the method carries over
+    # instead of silently resetting to wild encounters.
+    app.selectbox(key="new_game").select("Black 2")
+    app.run()
+    assert app.selectbox(key="new_method_Black 2").value == "breeding"
+    assert app.checkbox(key="new_masuda").disabled is False
+
+
 def test_app_creates_platinum_masuda_hunt_with_five_rolls(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 

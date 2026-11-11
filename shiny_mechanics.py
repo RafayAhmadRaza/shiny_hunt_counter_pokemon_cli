@@ -456,6 +456,55 @@ SUPPORTED_GAMES: tuple[str, ...] = tuple(
 
 
 # ---------------------------------------------------------------------------
+# Explicit game capability registry
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GameCapabilities:
+    """Breeding and Masuda capabilities for a known game.
+
+    These are stored per game.  In particular, Generation II and Generation III
+    have breeding but no Masuda Method, while Legends: Arceus and Legends: Z-A
+    have neither.  Masuda is never inferred from the generation number.
+    """
+
+    breeding: bool
+    masuda_method: bool
+
+
+# Games the tracker can calculate ordinary shiny odds for get their capability
+# values from the mechanics registry above.  The extra games below are known to
+# the Masuda registry but are not yet modelled for ordinary shiny odds:
+#   - Gen I has no shiny Pokémon in the original games.
+#   - Gen II has its own shiny-inheritance mechanics, not Masuda.
+#   - Let's Go uses catch-combo and lure mechanics.
+_EXTRA_GAME_CAPABILITIES: dict[str, GameCapabilities] = {
+    # Generation I: no breeding and no standard shiny mechanic.
+    "Red": GameCapabilities(breeding=False, masuda_method=False),
+    "Blue": GameCapabilities(breeding=False, masuda_method=False),
+    "Yellow": GameCapabilities(breeding=False, masuda_method=False),
+    # Generation II: breeding exists, but Masuda was introduced in Gen IV.
+    # Shiny inheritance is a separate Gen II mechanic and is not modelled.
+    "Gold": GameCapabilities(breeding=True, masuda_method=False),
+    "Silver": GameCapabilities(breeding=True, masuda_method=False),
+    "Crystal": GameCapabilities(breeding=True, masuda_method=False),
+    # Let's Go: no breeding; shiny odds use catch combos and lures.
+    "Let's Go, Pikachu!": GameCapabilities(breeding=False, masuda_method=False),
+    "Let's Go, Eevee!": GameCapabilities(breeding=False, masuda_method=False),
+}
+
+GAME_CAPABILITIES: dict[str, GameCapabilities] = {
+    game: GameCapabilities(
+        breeding=mechanics.can_breed,
+        masuda_method=mechanics.masuda_supported,
+    )
+    for game, mechanics in GAME_MECHANICS.items()
+}
+GAME_CAPABILITIES.update(_EXTRA_GAME_CAPABILITIES)
+
+
+# ---------------------------------------------------------------------------
 # Game name aliases
 # ---------------------------------------------------------------------------
 
@@ -478,6 +527,20 @@ def _name_key(name: str) -> str:
 
 
 _EXTRA_ALIASES: dict[str, str] = {
+    # Generation I
+    "red": "Red",
+    "blue": "Blue",
+    "yellow": "Yellow",
+    "rby": "Red",
+    # Generation II
+    "gold": "Gold",
+    "silver": "Silver",
+    "crystal": "Crystal",
+    "gsc": "Gold",
+    # Let's Go
+    "letsgopikachu": "Let's Go, Pikachu!",
+    "letsgoeevee": "Let's Go, Eevee!",
+    "lgpe": "Let's Go, Pikachu!",
     # Generation III
     "firered": "FireRed",
     "fr": "FireRed",
@@ -538,12 +601,12 @@ _EXTRA_ALIASES: dict[str, str] = {
 }
 
 # Canonical names themselves always resolve to themselves.
-for _game in SUPPORTED_GAMES:
+for _game in GAME_CAPABILITIES:
     _EXTRA_ALIASES[_name_key(_game)] = _game
 
 
 def canonicalize_game(name: str) -> str | None:
-    """Return the canonical supported game name, or ``None`` if unsupported."""
+    """Return the canonical known game name, or ``None`` if unknown."""
     if name is None:
         return None
     key = _name_key(name)
@@ -553,15 +616,30 @@ def canonicalize_game(name: str) -> str | None:
 
 
 def get_mechanics(game: str) -> GameMechanics | None:
-    """Return mechanics for a game name/alias, or ``None`` if unsupported."""
+    """Return odds mechanics for a game name/alias, or ``None`` if not modelled."""
     canonical = canonicalize_game(game)
     if canonical is None:
         return None
     return GAME_MECHANICS.get(canonical)
 
 
+def get_capabilities(game: str) -> GameCapabilities | None:
+    """Return explicit breeding/Masuda capabilities for a known game."""
+    canonical = canonicalize_game(game)
+    if canonical is None:
+        return None
+    return GAME_CAPABILITIES.get(canonical)
+
+
+def is_known_game(game: str) -> bool:
+    """Whether the game is in the capability registry."""
+    return get_capabilities(game) is not None
+
+
 def is_supported_game(game: str) -> bool:
-    return canonicalize_game(game) is not None
+    """Whether the tracker can calculate ordinary shiny odds for the game."""
+    canonical = canonicalize_game(game)
+    return canonical in GAME_MECHANICS
 
 
 def game_generation(game: str) -> int | None:
@@ -578,8 +656,8 @@ def supported_methods(game: str) -> tuple[str, ...]:
 
 def game_supports_breeding(game: str) -> bool:
     """Whether the game has a breeding/egg mechanic at all."""
-    mechanics = get_mechanics(game)
-    return bool(mechanics and mechanics.can_breed)
+    capabilities = get_capabilities(game)
+    return bool(capabilities and capabilities.breeding)
 
 
 def shiny_charm_available(game: str, encounter_method: str = WILD) -> bool:
@@ -593,18 +671,18 @@ def shiny_charm_available(game: str, encounter_method: str = WILD) -> bool:
 def masuda_available(game: str, encounter_method: str = BREEDING) -> bool:
     """Whether Masuda can be selected for this game and method.
 
-    Masuda is a breeding-only mechanic.  The explicit ``masuda_supported``
-    field in the registry decides whether the game implements it; the
+    Masuda is a breeding-only mechanic.  The explicit ``masuda_method`` field
+    in :data:`GAME_CAPABILITIES` decides whether the game implements it; the
     generation number is never used as a proxy.
     """
-    mechanics = get_mechanics(game)
-    if mechanics is None:
+    capabilities = get_capabilities(game)
+    if capabilities is None:
         return False
     method = str(encounter_method or "").strip().lower()
     return bool(
         method == BREEDING
-        and mechanics.masuda_supported
-        and BREEDING in mechanics.supported_methods
+        and capabilities.breeding
+        and capabilities.masuda_method
     )
 
 
@@ -612,23 +690,25 @@ def masuda_unavailable_reason(
     game: str, encounter_method: str = BREEDING
 ) -> str | None:
     """Explain why Masuda cannot be selected, or return ``None`` if it can."""
-    mechanics = get_mechanics(game)
-    if mechanics is None:
+    canonical = canonicalize_game(game)
+    capabilities = get_capabilities(game)
+    if canonical is None or capabilities is None:
         return f"'{game}' is not a supported game."
     method = str(encounter_method or "").strip().lower()
-    if not mechanics.can_breed:
+    if not capabilities.breeding:
         return (
-            f"{mechanics.name} has no breeding, so the Masuda Method is not "
+            f"{canonical} has no breeding, so the Masuda Method is not "
             "available."
         )
-    if not mechanics.masuda_supported:
-        return f"The Masuda Method is not available in {mechanics.name}."
+    if not capabilities.masuda_method:
+        return f"The Masuda Method is not available in {canonical}."
     if method != BREEDING:
         return "The Masuda Method only applies to breeding (eggs)."
-    if method not in mechanics.supported_methods:
+    mechanics = get_mechanics(canonical)
+    if mechanics is not None and method not in mechanics.supported_methods:
         return (
             f"{encounter_method_label(method)} is not supported for "
-            f"{mechanics.name}."
+            f"{canonical}."
         )
     return None
 
