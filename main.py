@@ -51,10 +51,12 @@ st.set_page_config(
 
 
 def set_flash(message: str, kind: str = "success") -> None:
+    """Store a one-shot flash message for the next rerun."""
     st.session_state["_flash"] = (kind, message)
 
 
 def show_flash() -> None:
+    """Display and clear any pending flash message."""
     flash = st.session_state.pop("_flash", None)
     if flash is None:
         return
@@ -68,6 +70,7 @@ def show_flash() -> None:
 
 
 def save_and_rerun(pokemon: Pokemon) -> None:
+    """Persist a hunt and rerun the app, showing errors as UI messages."""
     try:
         update_hunt_in_csv(pokemon, load_hunts(CSV_PATH), CSV_PATH)
     except TrackerError as error:
@@ -77,6 +80,7 @@ def save_and_rerun(pokemon: Pokemon) -> None:
 
 
 def adjust_counter(pokemon: Pokemon, amount: int) -> None:
+    """Add encounters to a hunt and persist the result."""
     try:
         updated = custom_add_encounter(pokemon, amount)
     except TrackerError as error:
@@ -86,6 +90,7 @@ def adjust_counter(pokemon: Pokemon, amount: int) -> None:
 
 
 def decrease_counter(pokemon: Pokemon, amount: int) -> None:
+    """Remove encounters from a hunt and persist the result."""
     try:
         updated = custom_remove_encounter(pokemon, amount)
     except TrackerError as error:
@@ -100,6 +105,7 @@ def attempt_count_text(count: int, method: str) -> str:
 
 
 def hunt_header(pokemon: Pokemon) -> None:
+    """Render the hunt's name, game details and unsupported-game warning."""
     mechanics = get_mechanics(pokemon.game)
     details = [
         pokemon.game,
@@ -120,6 +126,7 @@ def hunt_header(pokemon: Pokemon) -> None:
 
 
 def render_odds(pokemon: Pokemon) -> None:
+    """Render odds metrics, warnings and the cumulative chance progress bar."""
     result = hunt_odds(pokemon)
     if not result.supported:
         st.warning(result.reason or "Odds are unavailable for this hunt.")
@@ -154,6 +161,7 @@ def render_odds(pokemon: Pokemon) -> None:
 
 @st.dialog("Record a phase")
 def phase_dialog(pokemon: Pokemon, expected_next_phase: int) -> None:
+    """Dialog that records a phase and resets the hunt's counter."""
     st.write(
         f"Record a shiny that appeared before **{pokemon.name}**. "
         "The hunt keeps all of its settings; only the counter is reset to zero."
@@ -206,6 +214,7 @@ def phase_dialog(pokemon: Pokemon, expected_next_phase: int) -> None:
 
 @st.dialog("Delete hunt?")
 def delete_dialog(pokemon: Pokemon) -> None:
+    """Confirmation dialog that deletes a hunt and all of its phases."""
     st.warning(
         f"Delete **{pokemon.name}** ({pokemon.game}) and all of its recorded "
         "phases? This action cannot be undone from the app."

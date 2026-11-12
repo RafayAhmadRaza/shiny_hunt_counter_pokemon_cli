@@ -125,6 +125,7 @@ class TransactionError(TrackerError):
 
 
 def _coerce_bool(value, default: bool = False) -> bool:
+    """Coerce a CSV value into a boolean, falling back to ``default``."""
     if isinstance(value, bool):
         return value
     if value is None:
@@ -145,6 +146,7 @@ def _coerce_bool(value, default: bool = False) -> bool:
 
 
 def _coerce_int(value, default: int = 0) -> int:
+    """Coerce a CSV value into an integer, falling back to ``default``."""
     try:
         if value is None or pd.isna(value):
             return default
@@ -154,6 +156,7 @@ def _coerce_int(value, default: int = 0) -> int:
 
 
 def _clean_text(value) -> str:
+    """Strip a value to text, treating ``None`` and NaN as an empty string."""
     if value is None:
         return ""
     try:
@@ -180,6 +183,7 @@ def _values_equal(left, right) -> bool:
 
 
 def _sanitize_method(game: str, method: str) -> str:
+    """Return a method the game supports, defaulting to wild encounters."""
     methods = supported_methods(game)
     method = _clean_text(method).lower()
     if not methods:
@@ -190,6 +194,7 @@ def _sanitize_method(game: str, method: str) -> str:
 
 
 def _fallback_odds(generation: int) -> int:
+    """Legacy base odds for games without a mechanics registry entry."""
     return 8192 if generation <= 5 else 4096
 
 
@@ -219,6 +224,7 @@ class Pokemon:
     masuda_method: bool = False
 
     def __post_init__(self) -> None:
+        """Sanitise fields and derive metadata from the mechanics registry."""
         self.name = _clean_text(self.name)
         self.game = _clean_text(self.game)
         self.encounter_count = max(0, _coerce_int(self.encounter_count, 0))
@@ -270,10 +276,12 @@ class Pokemon:
         )
 
     def to_row(self) -> dict:
+        """Convert the hunt into a CSV-ready mapping."""
         return {column: getattr(self, column) for column in HUNT_COLUMNS}
 
     @property
     def odds_result(self) -> OddsResult:
+        """Authoritative odds result for this hunt."""
         return calculate_shiny_odds(
             self.game,
             self.encounter_method,
@@ -293,6 +301,7 @@ class Phased:
     phase: int = 1
 
     def to_row(self) -> dict:
+        """Convert the phase into a CSV-ready mapping."""
         return {column: getattr(self, column) for column in PHASE_COLUMNS}
 
 
@@ -310,6 +319,7 @@ class MigrationReport:
 
     @property
     def changed(self) -> bool:
+        """Whether either CSV was changed by the migration."""
         return self.hunts_changed or self.phases_changed
 
 
@@ -391,6 +401,7 @@ def _backup_files(
 
 
 def _validate_hunts_df(dataframe: pd.DataFrame) -> None:
+    """Raise :class:`ValidationError` when hunt rows break the schema."""
     missing = [column for column in HUNT_COLUMNS if column not in dataframe.columns]
     if missing:
         raise ValidationError(f"Missing hunt column(s): {', '.join(missing)}")
@@ -408,6 +419,7 @@ def _validate_hunts_df(dataframe: pd.DataFrame) -> None:
 
 
 def _validate_phases_df(dataframe: pd.DataFrame) -> None:
+    """Raise :class:`ValidationError` when phase rows break the schema."""
     missing = [column for column in PHASE_COLUMNS if column not in dataframe.columns]
     if missing:
         raise ValidationError(f"Missing phase column(s): {', '.join(missing)}")
@@ -1150,14 +1162,17 @@ def phase_summary(phases_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_encounter(pokemon: Pokemon) -> Pokemon:
+    """Return a copy of the hunt with one more encounter."""
     return replace(pokemon, encounter_count=pokemon.encounter_count + 1)
 
 
 def remove_encounter(pokemon: Pokemon) -> Pokemon:
+    """Return a copy of the hunt with one fewer encounter (never below zero)."""
     return replace(pokemon, encounter_count=max(0, pokemon.encounter_count - 1))
 
 
 def custom_add_encounter(pokemon: Pokemon, increase_count: int) -> Pokemon:
+    """Return a copy of the hunt with ``increase_count`` extra encounters."""
     increase_count = _coerce_int(increase_count, 0)
     if increase_count <= 0:
         raise ValidationError("Increase must be positive.")
@@ -1165,6 +1180,7 @@ def custom_add_encounter(pokemon: Pokemon, increase_count: int) -> Pokemon:
 
 
 def custom_remove_encounter(pokemon: Pokemon, decrease_count: int) -> Pokemon:
+    """Return a copy of the hunt with ``decrease_count`` encounters removed."""
     decrease_count = _coerce_int(decrease_count, 0)
     if decrease_count <= 0:
         raise ValidationError("Value entered must be positive.")
@@ -1174,10 +1190,12 @@ def custom_remove_encounter(pokemon: Pokemon, decrease_count: int) -> Pokemon:
 
 
 def toggle_shiny_charm(pokemon: Pokemon) -> Pokemon:
+    """Return a copy of the hunt with the Shiny Charm flag flipped."""
     return replace(pokemon, shiny_charm=not pokemon.shiny_charm)
 
 
 def mark_hunt_complete(pokemon: Pokemon) -> Pokemon:
+    """Return a copy of the hunt marked as complete."""
     return replace(pokemon, is_done=True)
 
 
@@ -1213,6 +1231,7 @@ def calculate_probability(pokemon: Pokemon) -> float:
 
 
 def hunt_probability_percent(pokemon: Pokemon) -> float:
+    """Cumulative shiny probability (percentage) for the hunt."""
     return calulate_probability(pokemon)
 
 
@@ -1227,6 +1246,7 @@ def from_csv_to_Pokemon(dataframe: pd.DataFrame) -> list[Pokemon]:
 
 
 def list_phases(dataframe: pd.DataFrame) -> None:
+    """Print recorded phases in a readable terminal format."""
     if dataframe.empty:
         print("No phases recorded yet.")
         return
@@ -1240,6 +1260,7 @@ def list_phases(dataframe: pd.DataFrame) -> None:
 
 
 def list_hunts(dataframe: pd.DataFrame, select_mode: bool = False) -> None:
+    """Print hunts in a readable terminal format, optionally numbered."""
     if dataframe.empty:
         print("No hunts found. Start a new hunt.")
         return
@@ -1249,6 +1270,7 @@ def list_hunts(dataframe: pd.DataFrame, select_mode: bool = False) -> None:
 
 
 def select_hunt(dataframe: pd.DataFrame) -> Pokemon | None:
+    """Prompt the user to choose a hunt, returning ``None`` when cancelled."""
     if dataframe.empty:
         print("No hunts found. Start a new hunt.")
         return None

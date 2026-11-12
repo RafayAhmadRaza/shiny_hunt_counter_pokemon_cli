@@ -94,6 +94,7 @@ class GameMechanics:
     sources: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        """Validate that the capability flags are internally consistent."""
         if not self.can_breed and BREEDING in self.supported_methods:
             raise ValueError(f"{self.name}: breeding method requires can_breed.")
         if self.masuda_supported:
@@ -108,10 +109,12 @@ class GameMechanics:
 
     @property
     def has_shiny_charm(self) -> bool:
+        """Whether the Shiny Charm exists in this game."""
         return bool(self.shiny_charm_methods)
 
     @property
     def has_masuda(self) -> bool:
+        """Whether this game implements the Masuda Method."""
         return self.masuda_supported
 
 
@@ -143,6 +146,7 @@ def _mechanics(
     notes: tuple[str, ...] = (),
     sources: tuple[str, ...] = (_BULBAPEDIA_SHINY, _BULBAPEDIA_CHARM, _BULBAPEDIA_MASUDA),
 ) -> GameMechanics:
+    """Build a :class:`GameMechanics` record for the registry."""
     return GameMechanics(
         name=name,
         generation=generation,
@@ -210,6 +214,7 @@ _GEN7 = ("Sun", "Moon", "Ultra Sun", "Ultra Moon")
 
 
 def _build_registry() -> dict[str, GameMechanics]:
+    """Build the per-game mechanics registry."""
     registry: dict[str, GameMechanics] = {}
 
     # Generation III: single 1/8192 roll, no Shiny Charm, no Masuda Method.
@@ -643,11 +648,13 @@ def is_supported_game(game: str) -> bool:
 
 
 def game_generation(game: str) -> int | None:
+    """Return the generation for a game, or ``None`` if it is not modelled."""
     mechanics = get_mechanics(game)
     return mechanics.generation if mechanics else None
 
 
 def supported_methods(game: str) -> tuple[str, ...]:
+    """Return the encounter methods supported by the game (empty if unknown)."""
     mechanics = get_mechanics(game)
     if mechanics is None:
         return ()
@@ -661,6 +668,7 @@ def game_supports_breeding(game: str) -> bool:
 
 
 def shiny_charm_available(game: str, encounter_method: str = WILD) -> bool:
+    """Whether the Shiny Charm affects this game and encounter method."""
     mechanics = get_mechanics(game)
     if mechanics is None:
         return False
@@ -780,6 +788,7 @@ def format_one_in(one_in: float) -> str:
 
 
 def _unsupported(game: str, method: str, reason: str) -> OddsResult:
+    """Build an unsupported :class:`OddsResult` carrying a reason."""
     return OddsResult(
         supported=False,
         game=str(game),
